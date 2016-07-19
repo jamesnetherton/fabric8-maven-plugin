@@ -18,6 +18,7 @@ package io.fabric8.maven.plugin;
 
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -27,8 +28,6 @@ import io.fabric8.kubernetes.api.model.KubernetesList;
 import io.fabric8.kubernetes.api.model.KubernetesListBuilder;
 import io.fabric8.maven.core.access.ClusterAccess;
 import io.fabric8.maven.core.config.PlatformMode;
-import io.fabric8.maven.core.util.KubernetesResourceUtil;
-import io.fabric8.maven.core.util.ResourceFileType;
 import io.fabric8.maven.docker.access.DockerAccessException;
 import io.fabric8.maven.docker.config.ImageConfiguration;
 import io.fabric8.maven.docker.service.ServiceHub;
@@ -136,10 +135,13 @@ public class BuildMojo extends io.fabric8.maven.docker.BuildMojo {
         KubernetesListBuilder builder = new KubernetesListBuilder();
         String buildName = imageName.getSimpleName() + "-build";
         String imageStreamName = imageName.getSimpleName();
+        String deploymentConfigName = imageName.getSimpleName() + "-deployment";
 
-        // Check for buildconfig / imagestream and create them if necessary
-        checkOrCreateBuildConfig(client, builder, buildName, imageStreamName, imageName.getTag());
+        // Check for buildconfig / imagestream / deploymentconfig and create them if necessary
+        String tag = imageName.getTag();
+        checkOrCreateBuildConfig(client, builder, buildName, imageStreamName, tag);
         checkOrCreateImageStream(client, builder, imageStreamName);
+        checkOrCreateDeploymentConfig(client, builder, deploymentConfigName, imageStreamName, tag);
         createResourceObjects(client, builder);
 
         // Start the actual build
@@ -159,8 +161,6 @@ public class BuildMojo extends io.fabric8.maven.docker.BuildMojo {
 
 
     private void startBuild(File dockerTar, OpenShiftClient client, String buildName) {
-        // TODO: Wait unti kubernetes-client support instantiateBinary()
-        // PR is underway ....
         log.info("Starting build %s",buildName);
         client.buildConfigs().withName(buildName)
               .instantiateBinary()
@@ -174,7 +174,6 @@ public class BuildMojo extends io.fabric8.maven.docker.BuildMojo {
         }
     }
 
-    //
     private void checkOrCreateImageStream(OpenShiftClient client, KubernetesListBuilder builder, String imageStreamName) {
         boolean hasImageStream = client.imageStreams().withName(imageStreamName).get() != null;
         if (hasImageStream && recreateBuildConfig) {
@@ -226,4 +225,59 @@ public class BuildMojo extends io.fabric8.maven.docker.BuildMojo {
         }
     }
 
+    private void checkOrCreateDeploymentConfig(OpenShiftClient client, KubernetesListBuilder builder, String deploymentName,
+                                               String imageStreamName, String imageTag) {
+        boolean hasDeploymentConfig = client.deploymentConfigs().withName(deploymentName).get() != null;
+        if (hasDeploymentConfig && recreateBuildConfig) {
+            client.deploymentConfigs().withName(deploymentName).delete();
+            hasDeploymentConfig = false;
+        }
+        if (!hasDeploymentConfig) {
+            Map<String, String> selector = new HashMap<>();
+            String containerName = deploymentName + "container";
+            selector.put("name", containerName);
+
+            log.info("Creating DeploymentConfig %s:%s", deploymentName, imageTag);
+            builder.addNewDeploymentConfigItem()
+                .withNewMetadata()
+                  .withName(deploymentName)
+                .endMetadata()
+                .withNewSpec()
+                  .withNewStrategy()
+                    .withType("Rolling")
+                  .endStrategy()
+                  .withTriggers()
+                    .addNewTrigger()
+                    .withType("ImageChange")
+                    .withNewImageChangeParams()
+                      .withAutomatic(true)
+                      .withContainerNames().addToContainerNames(containerName)
+                      .withNewFrom()
+                        .withKind("ImageStreamTag")
+                        .withName(imageStreamName + ":" + imageTag)
+                      .endFrom()
+                      .withContainerNames(imageStreamName)
+                    .endImageChangeParams()
+                  .endTrigger()
+                  .withReplicas(1)
+                  .withSelector(selector)
+                  .withNewTemplate()
+                    .withNewMetadata()
+                      .withName(imageStreamName)
+                      .withLabels(selector)
+                    .endMetadata()
+                    .withNewSpec()
+                      .withContainers()
+                        .addNewContainer()
+                          .withName(imageStreamName)
+                          .withImage(imageStreamName + ":" + imageTag)
+                        .endContainer()
+                    .endSpec()
+                  .endTemplate()
+                .endSpec()
+              .endDeploymentConfigItem();
+        } else {
+            log.info("Using DeploymentConfig %s", deploymentName);
+        }
+    }
 }
