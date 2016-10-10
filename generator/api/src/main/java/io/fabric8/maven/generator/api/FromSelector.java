@@ -16,8 +16,6 @@ package io.fabric8.maven.generator.api;
  * limitations under the License.
  */
 
-import java.util.regex.Pattern;
-
 import io.fabric8.maven.core.config.OpenShiftBuildStrategy;
 import io.fabric8.maven.core.config.PlatformMode;
 import org.apache.maven.model.Plugin;
@@ -32,8 +30,6 @@ import org.apache.maven.project.MavenProject;
 public abstract class FromSelector {
 
     private final MavenGeneratorContext context;
-
-    private final Pattern REDHAT_VERSION_PATTERN = Pattern.compile("^.*\\.redhat-.*$");
 
     public FromSelector(MavenGeneratorContext context) {
         this.context = context;
@@ -60,7 +56,7 @@ public abstract class FromSelector {
             return false;
         }
         String version = plugin.getVersion();
-        return REDHAT_VERSION_PATTERN.matcher(version).matches();
+        return new RedHatVersionMatcher().matches(version);
     }
 
     public static class Default extends FromSelector {

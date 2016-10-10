@@ -53,13 +53,18 @@ public class FromSelectorTest {
         final Object[] data = new Object[] {
             openshift, s2i, "1.2.3.redhat-00009", "redhat-s2i-prop",
             openshift, docker, "1.2.3.redhat-00009", "redhat-docker-prop",
+            openshift, s2i, "1.2.3.foo-00009", "s2i-prop",
+            openshift, docker, "1.2.3.foo-00009", "docker-prop",
             openshift, s2i, "1.2.3", "s2i-prop",
             openshift, docker, "1.2.3", "docker-prop",
             null, s2i, "1.2.3.redhat-00009", "redhat-docker-prop",
             null, docker, "1.2.3.redhat-00009", "redhat-docker-prop",
+            null, s2i, "1.2.3.foo-00009", "docker-prop",
+            null, docker, "1.2.3.foo-00009", "docker-prop",
             null, s2i, "1.2.3", "docker-prop",
             null, docker, "1.2.3", "docker-prop",
             openshift, null, "1.2.3.redhat-00009", "redhat-docker-prop",
+            openshift, null, "1.2.3.foo-00009", "docker-prop",
             openshift, null, "1.2.3", "docker-prop",
         };
 
